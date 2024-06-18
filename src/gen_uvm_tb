@@ -1,0 +1,354 @@
+#!/usr/bin/python3
+#-*-coding:utf-8-*-
+
+###############################################################
+## Name     : gen_tb
+## Author   : gaojiaming
+## Date     : Tue Nov 29 22:26:14 CST 2022
+## Description:
+##
+##
+###############################################################
+
+import sys
+import os
+import re
+import argparse
+
+class Model:#{{{
+  name_max_size = 1
+  inst_max_size = 1
+  def __init__(self, parent, name, inst, type, create, connect):
+    self.parent  = parent
+    self.name  = name
+    self.inst  = inst
+    self.type  = type
+    self.create  = create
+    self.connect = connect
+    Model.name_max_size = max(len(self.name), Model.name_max_size)
+    Model.inst_max_size = max(len(self.inst), Model.inst_max_size)
+
+  def state_str(self, head = "  "):
+    str = ""
+    self.align_name = self.name + " " * (Model.name_max_size - len(self.name))
+    str+= head + "{0} {1};\n".format(self.align_name, self.inst)
+    return str
+
+  def create_str(self, head = "  "): #{{{
+    str = ""
+    if re.search(r"AGENT", self.type):
+      res0 = re.search(r"AGENT::(\w+)", self.type)
+      res1 = re.search(r"(\w+)\[(\d+)\]", self.inst)
+      if res1: #a_scb[8]
+        inst   = res1.group(1)
+        repeat = res1.group(2)
+        str+= head + "for(int i=0;i<{0};i=i+1)begin\n".format(repeat)
+        str+= head + "  {0}[i] = {1}::type_id::create($sformatf(\"{0}[%0d]\", i), this);\n".format(inst, self.name)
+        str+= head + "  {0}[i].is_active = {1};\n".format(inst, res0.group(1))
+        str+= head + "end\n"
+      else:
+        str+= head + "{0} = {1}::type_id::create(\"{0}\", this);\n".format(self.inst, self.name)
+        str+= head + "{0}.is_active = {1};\n".format(self.inst, res0.group(1))
+    elif self.type == "MODEL" or self.type == "SCB" or self.type == "VSQR":
+      res = re.search(r"(\w+)\[(\d+)\]", self.inst)
+      if res: #a_scb[8]
+        inst   = res.group(1)
+        repeat = res.group(2)
+        str+= head + "for(int i=0;i<{0};i=i+1)begin\n".format(repeat)
+        str+= head + "  {0}[i] = {1}::type_id::create($sformatf(\"{0}[%0d]\", i), this);\n".format(inst, self.name)
+        str+= head + "end\n"
+      else:
+        str+= head + "{0} = {1}::type_id::create(\"{0}\", this);\n".format(self.inst, self.name)
+      if self.type == "VSQR":
+        str+= head + "uvm_config_db #(uvm_object_wrapper)::set(\n"
+        str+= head + "  this,\n"
+        str+= head + "  \"{0}.main_phase\",\n".format(self.inst)
+        str+= head + "  \"default_sequence\",\n"
+        str+= head + "  {0}::type_id::get()\n".format(re.sub(r"vsqr", "seq", self.name))
+        str+= head + ");\n"
+    elif self.type == "RAL":
+      str+= head + "if(!uvm_config_db #({0})::get(this, \"\", \"{1}\", {1})) begin\n".format(self.name, self.inst)
+      str+= head + "  {0} = {1}::type_id::create(\"{0}\", this);\n".format(self.inst, self.name)
+      str+= head + "  {0}.build();\n".format(self.inst)
+      str+= head + "  {0}.lock_model();\n".format(self.inst)
+      str+= head + "  {0}.reset();\n".format(self.inst)
+      str+= head + "end\n"
+      str+= head + "adapter = apb_adapter::type_id::create(\"adapter\", this);\n"
+    return str
+  #}}}
+
+  def connect_str(self, head = "  "):
+    str = ""
+    if re.search(r"RAL", self.type):
+      str += head + "{0}.default_map.set_sequencer(apb_mst.sqr, adapter);\n".format(self.inst)
+      str += head + "{0}.default_map.set_auto_predict(1);\n".format(self.inst)
+    return str
+
+  def inf_inst_str(self, head = ""):
+    str = ""
+    self.align_name = self.name + " " * (Model.name_max_size - len(self.name))
+    if re.search(r"INF", self.type):
+      str += head + "{0} {1}(clk, rst_n);\n".format(self.align_name, self.inst)
+    return str
+
+  def inf_conf_str(self, head = "  "):
+    str = ""
+    if re.search(r"INF", self.type):
+      str += head + "uvm_config_db#(virtual {0})::set(null, \"*\", \"vif\", {1});\n".format(self.name, self.inst)
+    return str
+
+  def rtl_inst_str(self, head = ""):
+    str = ""
+    if re.search(r"RTL", self.type):
+      str += head + "{0} #(/*AUTOINSTPARAM*/)\n".format(self.name)
+      str += head + "{0}(/*AUTOINST*/);\n".format(self.inst)
+    return str
+
+  def generate_file(self, head = ""): #{{{
+    str = ""
+
+    author = os.popen("whoami").readlines()[0]
+    author = author.strip()
+    date = os.popen("date -d now").readlines()[0]
+    date = date.strip()
+
+    str += "// +FHDR------------------------------------------------------------\n"
+    str += "//                 Copyright (c) 2023 GEN_UVM_TB.\n"
+    str += "//                       ALL RIGHTS RESERVED\n"
+    str += "// -----------------------------------------------------------------\n"
+    str += "// Filename      : {0}.sv\n".format(self.name)
+    str += "// Author        : {0}\n".format(author)
+    str += "// Created On    : {0}\n".format(date)
+    str += "// Last Modified : \n"
+    str += "// -----------------------------------------------------------------\n"
+    str += "// Description:\n"
+    str += "//\n"
+    str += "//\n"
+    str += "// -FHDR------------------------------------------------------------\n"
+    str += "\n"
+
+    str += "`ifndef __{0}_SV__\n".format(self.name.upper())
+    str += "`define __{0}_SV__\n".format(self.name.upper())
+    str += "\n"
+    
+    str += "class {0} extends uvm_component;\n".format(self.name)
+    str += "\n"
+    str += "  //like\n"
+    str += "  //uvm_blocking_get_port #(inst_transaction)  inst_port;\n"
+    str += "  //uvm_analysis_port     #(axi_ar_transaction) ar_ap;\n"
+    str += "\n"
+    str += "  `uvm_component_utils({0});\n".format(self.name)
+    str += "\n"
+    str += "  extern function new(string name = \"{0}\", uvm_component parent=null);\n".format(self.name)
+    str += "  extern virtual function void build_phase(uvm_phase phase);\n"
+    str += "  extern virtual function void connect_phase(uvm_phase phase);\n"
+    str += "  extern virtual task reset_phase(uvm_phase phase);\n"
+    str += "  extern virtual task main_phase(uvm_phase phase);\n"
+    str += "  extern virtual task shutdown_phase(uvm_phase phase);\n"
+    str += "  extern virtual function void report_phase(uvm_phase phase);\n"
+    str += "  extern virtual task run_phase(uvm_phase phase);\n"
+    str += "\n"
+    str += "endclass: {0}\n".format(self.name)
+    str += "\n"
+    
+    str += "function {0}::new(string name = \"{0}\", uvm_component parent=null);\n".format(self.name)
+    str += "  super.new(name, parent);\n"
+    str += "endfunction: new\n"
+    str += "\n"
+
+    str += "function void {0}::build_phase(uvm_phase phase);\n".format(self.name)
+    str += "	super.build_phase(phase);\n"
+    str += "endfunction: build_phase\n"
+    str += "\n"
+    
+    str += "function void {0}::connect_phase(uvm_phase phase);\n".format(self.name)
+    str += "	super.connect_phase(phase);\n"
+    str += "endfunction: connect_phase\n"
+    str += "\n"
+
+    str += "task {0}::reset_phase(uvm_phase phase);\n".format(self.name)
+    str += "  super.reset_phase(phase);;\n"
+    str += "endtask: reset_phase;\n"
+    str += "\n"
+
+    str += "task {0}::main_phase(uvm_phase phase);\n".format(self.name)
+    str += "  super.main_phase(phase);;\n"
+    str += "endtask: main_phase;\n"
+    str += "\n"
+
+    str += "task {0}::shutdown_phase(uvm_phase phase);\n".format(self.name)
+    str += "  super.shutdown_phase(phase);;\n"
+    str += "endtask: shutdown_phase;\n"
+    str += "\n"
+
+    str += "task {0}::run_phase(uvm_phase phase);\n".format(self.name)
+    str += "  super.run_phase(phase);;\n"
+    str += "endtask: run_phase;\n"
+    str += "\n"
+
+    str += "function void {0}::report_phase(uvm_phase phase);\n".format(self.name)
+    str += "	super.report_phase(phase);\n"
+    str += "endfunction: report_phase\n"
+    str += "\n"
+
+    str += "`endif\n"
+
+    return str
+  #}}}
+
+#}}}
+
+def input_cfg_file():#{{{
+  if len(sys.argv) <= 1:
+    print("ERROR: You need input a agent name")
+    sys.exit()
+  tb_name = sys.argv[1]
+  tb_cfg_file = tb_name + ".cfg"
+  if not os.path.exists(tb_cfg_file):
+    os.system("cp {0}/gen_tb.cfg ./{1}".format(root_path, tb_cfg_file))
+    os.system("gvim ./{}".format(tb_cfg_file))
+    rsp=input("Please input y after complete: ")
+    if rsp != "y":
+      print("ERROR: You need input a agent cfg_file")
+      sys.exit()
+  return tb_name, tb_cfg_file
+#}}}
+
+def sys_cfg_file(cfg_file): #{{{
+  env_mdl_list = []
+  base_mdl_list = []
+  harness_mdl_list = []
+  with open(cfg_file, "r") as hd:
+    handle = hd.readlines()
+    for line in handle:
+      if not re.search(r"^\s*//", line):
+        arr = line.split("|")
+        parent = arr[0].strip()
+        name   = arr[1].strip()
+        inst   = arr[2].strip()
+        type   = arr[3].strip()
+        create = arr[4].strip()
+        connect= arr[5].strip()
+        model = Model(parent, name, inst, type, create, connect)
+        if parent == "env":
+          env_mdl_list.append(model)
+        if parent == "base":
+          base_mdl_list.append(model)
+        else:
+          harness_mdl_list.append(model)
+  return env_mdl_list, base_mdl_list, harness_mdl_list
+#}}}
+
+def gen_env(tb_name, mdl_list): #{{{
+  env_str = ""
+  with open("{0}/tb_dict/env/tb_env.sv".format(root_path), "r") as hd:
+    handle = hd.readlines()
+    for line in handle:
+      line = re.sub(r"tb_env", "{0}_env".format(tb_name), line)
+      line = re.sub(r"TB_ENV", "{0}_ENV".format(tb_name.upper()), line)
+      if re.search(r"\/\*STATE_POSI\*\/", line):
+        for mdl in mdl_list:
+          env_str+= mdl.state_str()
+      elif re.search(r"\/\*CREATE_POSI\*\/", line):
+        for mdl in mdl_list:
+          env_str+= mdl.create_str()
+      elif re.search(r"\/\*CONNECT_POSI\*\/", line):
+        env_str += "  //like: \n"
+        env_str += "  //rm.inst_port.connect(inst_agt.out_fifo.blocking_get_export);\n"
+        env_str += "  //aw_scb.exp_port.connect(rm.aw_fifo.blocking_get_export);\n"
+        env_str += "  //aw_scb.act_port.connect(aw_agt.out_fifo.blocking_get_export);\n"
+        for mdl in mdl_list:
+          env_str+= mdl.connect_str()
+      else:
+        env_str+=line
+  return env_str
+#}}}
+
+def gen_base(tb_name, mdl_list): #{{{
+  env_str = ""
+  with open("{0}/tb_dict/tc/base_test.sv".format(root_path), "r") as hd:
+    handle = hd.readlines()
+    for line in handle:
+      if re.search(r"\/\*STATE_POSI\*\/", line):
+        for mdl in mdl_list:
+          env_str += mdl.state_str()
+      elif re.search(r"\/\*CREATE_POSI\*\/", line):
+        for mdl in mdl_list:
+          env_str += mdl.create_str()
+      elif re.search(r"\/\*CONNECT_POSI\*\/", line):
+        env_str += "  //like: \n"
+        env_str += "  //rm.inst_port.connect(inst_agt.out_fifo.blocking_get_export);\n"
+        env_str += "  //aw_scb.exp_port.connect(rm.aw_fifo.blocking_get_export);\n"
+        env_str += "  //aw_scb.act_port.connect(aw_agt.out_fifo.blocking_get_export);\n"
+        for mdl in mdl_list:
+          env_str += mdl.connect_str()
+      else:
+        env_str += line
+  return env_str
+#}}}
+
+def gen_harness(tb_name, mdl_list): #{{{
+  harness_str = ""
+  with open("{0}/tb_dict/th/harness.sv".format(root_path), "r") as hd:
+    handle = hd.readlines()
+    for line in handle:
+      if re.search(r"\/\*INF_POSI\*\/", line):
+        for mdl in mdl_list:
+          harness_str += mdl.inf_inst_str()
+      elif re.search(r"\/\*CONFIG_DB_POSI\*\/", line):
+        for mdl in mdl_list:
+          harness_str += mdl.inf_conf_str()
+      elif re.search(r"\/\*RTL_POSI\*\/", line):
+        for mdl in mdl_list:
+          harness_str += mdl.rtl_inst_str()
+      else:
+        harness_str += line
+  return harness_str
+#}}}
+
+def mkdir_dict(tb_name, env, base, harness, env_mdl_list, base_mdl_list): #{{{
+  os.system("mkdir -p {0}".format(tb_name))
+  os.system("mkdir -p {0}/tc".format(tb_name))
+  os.system("mkdir -p {0}/env".format(tb_name))
+  os.system("cp {0}/tb_dict/cfg ./{1}/ -rf".format(root_path, tb_name))
+  os.system("cp {0}/tb_dict/sim ./{1}/ -rf".format(root_path, tb_name))
+  os.system("cp {0}/tb_dict/th  ./{1}/ -rf".format(root_path, tb_name))
+  os.system("cp {0}/tb_dict/tc  ./{1}/ -rf".format(root_path, tb_name))
+  
+  with open("./{0}/env/{0}_env.sv".format(tb_name), "w") as hd:
+    hd.write(env)
+  with open("./{0}/tc/base_test.sv".format(tb_name), "w") as hd:
+    hd.write(base)
+  with open("./{0}/th/harness.sv".format(tb_name), "w") as hd:
+    hd.write(harness)
+  
+  for mdl in env_mdl_list:
+    if mdl.create == "Y":
+      with open("./{0}/env/{1}.sv".format(tb_name, mdl.name), "w") as hd:
+        hd.write(mdl.generate_file())
+  for mdl in base_mdl_list:
+    if mdl.create == "Y":
+      with open("./{0}/env/{1}.sv".format(tb_name, mdl.name), "w") as hd:
+        hd.write(mdl.generate_file())
+#}}}
+
+def main(): #{{{
+  (tb_name, tb_cfg_file) = input_cfg_file()
+  (env_mdl_list, base_mdl_list, harness_mdl_list) = sys_cfg_file(tb_cfg_file)
+  env = gen_env(tb_name, env_mdl_list)
+  base = gen_base(tb_name, base_mdl_list)
+  harness = gen_harness(tb_name, harness_mdl_list)
+  mkdir_dict(tb_name, env, base, harness, env_mdl_list, base_mdl_list)
+#}}}
+
+if __name__ == "__main__": #{{{
+  global root_path
+  global work_path
+  root_path = sys.path[0]
+  work_path = os.path.abspath('.')
+  print("%s is working" % __file__)
+  #print("script_path is %s/gen_uvm_tb, work_path is %s" % (root_path, work_path))
+  #print("script_path is %s/gen_uvm_tb, work_path is %s" % (root_path, work_path))
+  #sys.exit(0)
+  main()
+#}}}

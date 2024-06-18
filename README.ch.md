@@ -1,38 +1,38 @@
-# gen_uvm_tb
+# gen_uvm_tb说明文档
 
-## Preface
+## 前言
 
-Objectively speaking, the environmental structures built by different verification engineers vary greatly, hence scripts of the gen_uvm_tb type are also diverse. Therefore, this script does not aim for perfection and completeness; it merely serves as a tool for building a simple, universal verification environment, reducing the time consumption brought by fixed and repetitive work.
+客观的说，不同验证工程师所搭建的环境结构差异极大，因此gen_uvm_tb类型的脚本也是五花八门。故而本脚本也不追求完善和充分，只是作为搭建简单的普适性验证环境的工具，降低固定的以及重复性工作带来的时间消耗。
 
-The ultimate goal pursued is that gen_uvm_tb + gen_vum_agent + auto_testbench can cover the functional testing of both the UT (unit test) and BT (block test) levels.
+最终追求的目的是，gen_uvm_tb + gen_vum_agent + auto_testbench可以覆盖UT（unit test）和BT（block test）两个层级的功能测试。
 
-## Project Path
+## 工程路径
 
-[gen_uvm_tb: Generate UVM Simulation Environment](https://gitee.com/gjm9999/gen_uvm_tb)
+[gen_uvm_tb: 生成uvm仿真环境](https://gitee.com/gjm9999/gen_uvm_tb)
 
-## Update Log
+## 更新记录
 
-| Date      | Update                                                                                                                           | Description |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| 2024/6/18 | 1. Added instantiation of dut and interface<br>2. Added file generation function<br>3. Modified alignment and indentation issues |             |
+| 时间        | 更新                                                    | 说明  |
+| --------- | ----------------------------------------------------- | --- |
+| 2024/6/18 | 1.增加了dut和interface的例化功能<br>2.增加了生成文件功能<br>3.修改了对齐缩进问题 |     |
 
-## Feature List
+## 功能列表
 
-1. Generate verification environments such as env/base_test/harness based on configuration tables;
+1.根据配置表生成env/base_test/harness等验证环境；
 
-2. Generate a compilable simulation platform based on VCS;
+2.生成基于VCS的可编译仿真平台；
 
-3. Generate empty files based on options;
+3.根据选项生成空文件；
 
-## Usage Instructions
+## 使用说明
 
-After downloading the script to a Linux workstation and setting the executable path, run the script:
+下载脚本于linux工作站后并配置可执行路径后，执行脚本：
 
 ```
 gen_uvm_tb env_name
 ```
 
-If there is an env_name.cfg file in the current directory, it will directly generate the simulation environment; otherwise, it will create and open the env_name.cfg configuration file with gvim:
+如果当前目录下有env_name.cfg文件则会直接生成仿真环境，否则会通过gvim新建并打开env_name.cfg配置文件：
 
 ```
 //======================================================================================================
@@ -47,23 +47,23 @@ harness    |                 |           |                                  |   
 //======================================================================================================
 ```
 
-1. position: Indicates the location of a component, which can only be one of env/base/harness;
+position：表示某个组件所在的位置，只能选择env/base/harness三者之一；
 
-2. component_name: The name of the component;
+component_name：组件的名字；
 
-3. inst_name: The instantiation name of the component, which can be instantiated in an array form here;
+inst_name：组件的例化名，此处可以为数组形式例化；
 
-4. component_type: The type of the component, which can only be selected from AGENT|MODEL|RAL|SCB|VSQR|RTL|INF, for the AGENT type, it is necessary to indicate whether it is an active or passive attribute AGENT::UVM_ACTIVE/AGENT::UVM_PASSIVE;
+component_type：组件类型，只能在AGENT|MODEL|RAL|SCB|VSQR|RTL|INF这几种里进行选择，对于AGENT类型需要标明其主动还是从动属性AGENT::UVM_ACTIVE/AGENT::UVM_PASSIVE；
 
-5. create new: Indicates whether a new component needs to be created, regardless of where the component is instantiated, it is newly created in the env folder;
+create new：表示是否需要新建该组件，无论该组件例化在哪个位置，均新建于env文件夹；
 
-6. connect: The connection relationship between the component and other components, because the form of the components is various, so the configuration here is only for reference and will not be reflected in the environment generation.
+connect：组件与其他组件的链接关系，因为组件形式千奇百怪所以这里的配置仅为参考，不会体现在环境生成中。
 
-Fill in this configuration file according to the requirements, and after typing y, the generated environment will be located in the env_name folder in the current directory.
+按照需求填写该配置文件后，键入y后生成的环境位于当前目录的env_name文件夹下。
 
-## Usage Example
+## 使用示例
 
-The configuration file test.cfg in the current directory is as follows:
+当前目录下完成配置文件test.cfg如下：
 
 ```
 //======================================================================================================
@@ -87,10 +87,13 @@ harness    | in_inf          | u_in_inf  | INF                              | N 
 //======================================================================================================
 ```
 
-Type the command:
-    gen_uvm_tb test
+键入命令：
 
-Afterwards, the test folder is generated, and the folder structure is as follows:
+```
+gen_uvm_tb test
+```
+
+之后生成了test文件夹，文件夹结构如下：
 
 ```
 .
@@ -108,12 +111,12 @@ Afterwards, the test folder is generated, and the folder structure is as follows
 |   |—— base_test.sv
 |   |—— tc.f
 |__ th
-    |—— harness.sv
+    |__ harness.sv
 ```
 
-Take a look at the key code and the parts that need to be modified manually.
+看一下生成的关键代码以及需要手动修改的部分。
 
-The core part of the **harness** is as follows:
+**harness**中的核心部分如下：
 
 ```
 // ----------------------------------------------------------------
@@ -147,15 +150,15 @@ endmodule
 // End:
 ```
 
-1. For the paths that need to be configured for the interface, they need to be manually configured according to the actual situation;
+1. 对于interface需要配置的路径，需要根据实际情况手动配置；
 
-2. The instantiation of RTL is completed with the help of verilog-mode, which is my favorite Verilog emacs/vim plugin. If you don't like the generated form here, you can also use other tools like auto_testbench to generate the instantiation and wiring of DUT;
+2. RTL的例化借助verilog-mode完成，这是我最喜欢的verilog emacs/vim插件，如果不喜欢这里的生成形式也可以借助其他工具auto_testbench生成DUT的例化和连线；
 
-3. The assign area is the interconnection area between the interface and wire/logic, which needs to be manually completed.
+3. assign区域是interface和wire/logic的互联区域需要手动完成；
 
-The harness is a bit tricky, mainly because guessing the interconnection relationship between the interface and DUT is quite troublesome. Although there are some powerful ways, I still think that even after generation, it still takes a lot of time to check and adjust, it might as well be done by oneself.
+harness是有一些取巧的，主要在于推测interface和DUT的互联关系是一件比较麻烦的事情。尽管有一些大力出奇迹的方式，不过我还是觉得哪怕生成之后一样需要花费很多时间去排查和调整，不如就自己来完成吧。
 
-The core code of **test_env** has the following parts:
+**test_env**的核心代码有如下的部分：
 
 ```
 class test_env extends uvm_env;
@@ -179,7 +182,7 @@ class test_env extends uvm_env;
 endclass: test_env
 ```
 
-The pleasing indentation and alignment, as well as the declaration of some methods, need to be done by yourself if you want to add more methods. The main body of the build_phase function is as follows:
+令人赏心悦目的缩进与对齐以及部分方法的声明，如果要补充更多的方法就需要自己动手了。其中build_phase函数主体如下：
 
 ```
 function void test_env::build_phase(uvm_phase phase);
@@ -205,7 +208,7 @@ function void test_env::build_phase(uvm_phase phase);
 endfunction: build_phase
 ```
 
-This part is largely my personal coding habit, and everyone can add or modify according to the actual situation. The part of connect_phase mentioned before, the internal structure of each component is various, it is better to directly complete this part instead of writing too much information in the configuration file, of course, some hint code is also written:
+这部分很大程度是我个人的代码习惯，大家根据实际情况增减修改就好。而connect_phase的部分前面提过，每个组件内部的结构千奇百怪，与其在配置文件里写太多的信息不如大家直接完成这一部分，当然也写了一些提示代码：
 
 ```
 function void test_env::connect_phase(uvm_phase phase);
@@ -217,7 +220,7 @@ function void test_env::connect_phase(uvm_phase phase);
 endfunction: connect_phase
 ```
 
-For the base_test part, the generated code is similar to test_env, but there is an unnecessary watchdog structure here that can be commented out in the main_phase:
+base_test部分，生成代码和test_env比较接近，只是这里有一个watch_dog结构不需要的在main_phase中注释掉就可以：
 
 ```
 class base_test extends uvm_test;
@@ -239,7 +242,7 @@ class base_test extends uvm_test;
 endclass: base_test
 ```
 
-For the RAL type of model, there are the following operations, if not needed, just comment it out:
+对于RAL类型的model，会有如下的一些操作，如果不需要注释掉即可：
 
 ```
   if(!uvm_config_db #(d_ral_model)::get(this, "", "ral", ral)) begin
@@ -253,7 +256,7 @@ For the RAL type of model, there are the following operations, if not needed, ju
   ral.default_map.set_auto_predict(1);  
 ```
 
-Finally, for the my_rm file marked as create new = Y in the configuration, it will be generated with this template:
+最后是配置中标注create new = Y的my_rm文件，会固定以此模板生成：
 
 ```
 // +FHDR------------------------------------------------------------
@@ -297,11 +300,11 @@ function my_rm::new(string name = "my_rm", uvm_component parent=null);
 endfunction: new
 
 function void my_rm::build_phase(uvm_phase phase);
-  super.build_phase(phase);
+    super.build_phase(phase);
 endfunction: build_phase
 
 function void my_rm::connect_phase(uvm_phase phase);
-  super.connect_phase(phase);
+    super.connect_phase(phase);
 endfunction: connect_phase
 
 task my_rm::reset_phase(uvm_phase phase);
@@ -321,10 +324,10 @@ task my_rm::run_phase(uvm_phase phase);
 endtask: run_phase;
 
 function void my_rm::report_phase(uvm_phase phase);
-  super.report_phase(phase);
+    super.report_phase(phase);
 endfunction: report_phase
 
 `endif
 ```
 
-The structure of the generated file is just like this, if you need to run the environment, you also need to modify the tb.f file.
+生成文件的结构就是如此，如果需要运行环境还需要修改tb.f文件。
